@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "WebFetch(domain:www.lashkaraa.com)",
+      "WebFetch(domain:www.mirraw.com)"
+    ]
+  }
+}
