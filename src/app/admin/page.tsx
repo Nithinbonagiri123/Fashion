@@ -71,6 +71,8 @@ export default function AdminPage() {
       description: newDesc,
       fabric_info: newFabric || "Handcrafted",
       image_filename: newImage || "new_garment.jpg",
+      category: "women",
+      subcategory: "Sarees",
     });
     setGarments((prev) => [added, ...prev]);
     setNewName("");

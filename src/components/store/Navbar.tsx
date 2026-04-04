@@ -6,12 +6,12 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Menu, X, Search, User, ShoppingBag } from "lucide-react";
 
 const navLinks = [
-  { label: "Women", href: "/#" },
-  { label: "Men", href: "/#" },
-  { label: "Accessories", href: "/#" },
-  { label: "Bridal", href: "/#" },
-  { label: "Discover", href: "/#how-it-works" },
-  { label: "Sale", href: "/#", highlight: true },
+  { label: "Women", href: "/women" },
+  { label: "Men", href: "/men" },
+  { label: "Accessories", href: "/accessories" },
+  { label: "Bridal", href: "/bridal" },
+  { label: "Discover", href: "/discover" },
+  { label: "Sale", href: "/sale", highlight: true },
 ];
 
 export default function Navbar() {
