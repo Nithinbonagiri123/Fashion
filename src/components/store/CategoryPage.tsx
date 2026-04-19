@@ -6,9 +6,6 @@ import { TrendingUp, Clock, Flame, ChevronDown } from "lucide-react";
 import { type Garment } from "@/lib/garmentData";
 import { getGarmentImage, getGarmentImageLarge } from "@/lib/imageMap";
 import { incrementLike } from "@/lib/supabase";
-import AnnouncementBar from "./AnnouncementBar";
-import Navbar from "./Navbar";
-import Footer from "./Footer";
 import GarmentCard from "./GarmentCard";
 import DetailOverlay from "./DetailOverlay";
 
@@ -84,9 +81,6 @@ export default function CategoryPage({
 
   return (
     <>
-      <AnnouncementBar />
-      <Navbar />
-
       {/* Hero banner */}
       <section className="relative h-[40vh] sm:h-[50vh] overflow-hidden bg-black">
         <img
@@ -223,8 +217,6 @@ export default function CategoryPage({
           />
         )}
       </AnimatePresence>
-
-      <Footer />
     </>
   );
 }

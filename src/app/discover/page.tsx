@@ -1,8 +1,5 @@
 import type { Metadata } from "next";
-import AnnouncementBar from "@/components/store/AnnouncementBar";
-import Navbar from "@/components/store/Navbar";
 import HowItWorks from "@/components/store/HowItWorks";
-import Footer from "@/components/store/Footer";
 
 export const metadata: Metadata = {
   title: "Discover — The Vastra Virasat Story",
@@ -12,9 +9,6 @@ export const metadata: Metadata = {
 export default function DiscoverPage() {
   return (
     <>
-      <AnnouncementBar />
-      <Navbar />
-
       {/* Hero */}
       <section className="relative h-[50vh] sm:h-[60vh] overflow-hidden bg-black">
         <img
@@ -120,7 +114,6 @@ export default function DiscoverPage() {
       </section>
 
       <HowItWorks />
-      <Footer />
     </>
   );
 }

@@ -3,7 +3,14 @@
     "allow": [
       "Bash(npm run:*)",
       "WebFetch(domain:www.lashkaraa.com)",
-      "WebFetch(domain:www.mirraw.com)"
+      "WebFetch(domain:www.mirraw.com)",
+      "Read(//Users/nikkibonagiri/Desktop/**)",
+      "Bash(npx create-next-app@latest job-dashboard --typescript --tailwind --app --src-dir --eslint --no-turbopack --use-npm)",
+      "Bash(npm install:*)",
+      "Bash(npx playwright:*)",
+      "Bash(npx prisma:*)",
+      "Bash(ls /Users/nikkibonagiri/Desktop/job-dashboard/src/generated/prisma/index*)",
+      "Bash(ls /Users/nikkibonagiri/Desktop/job-dashboard/node_modules/@prisma/client/default*)"
     ]
   }
 }

@@ -34,7 +34,7 @@ export default function Navbar() {
           {/* Center: Nav links (desktop) */}
           <nav className="hidden lg:flex items-center gap-6 xl:gap-8">
             {navLinks.map((link) => (
-              <a
+              <Link
                 key={link.label}
                 href={link.href}
                 className={`text-[11px] tracking-[0.18em] uppercase transition-colors ${
@@ -44,7 +44,7 @@ export default function Navbar() {
                 }`}
               >
                 {link.label}
-              </a>
+              </Link>
             ))}
           </nav>
 
@@ -103,7 +103,7 @@ export default function Navbar() {
           >
             <nav className="px-6 py-3">
               {navLinks.map((link) => (
-                <a
+                <Link
                   key={link.label}
                   href={link.href}
                   onClick={() => setMobileOpen(false)}
@@ -112,7 +112,7 @@ export default function Navbar() {
                   }`}
                 >
                   {link.label}
-                </a>
+                </Link>
               ))}
             </nav>
           </motion.div>

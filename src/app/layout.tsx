@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
+import SiteChrome from "@/components/store/SiteChrome";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -54,7 +55,9 @@ export default function RootLayout({
       lang="en"
       className={`${inter.variable} ${playfair.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
+      <body className="min-h-full flex flex-col font-sans">
+        <SiteChrome>{children}</SiteChrome>
+      </body>
     </html>
   );
 }
