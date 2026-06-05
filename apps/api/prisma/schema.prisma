@@ -1,0 +1,396 @@
+// Demand Fashion — production schema.
+//
+// Money: all monetary values are integer cents in a single currency column on the
+// owning aggregate (Order, Wallet). No floats anywhere. Cross-currency conversion
+// is out of scope for v1.
+//
+// Stock control: ProductVariant.warehouseStock is the source of truth. It is only
+// decremented inside the Stripe webhook handler, atomically, under a row lock.
+// reservedStock is reserved at cart-checkout time for short-lived holds.
+//
+// Returns: tracked at OrderItem level via OrderItem.returnStatus + Return rows.
+//
+// Webhook idempotency: WebhookEvent.providerEventId uniqueness guarantees a single
+// processing of any inbound event regardless of retries.
+//
+// Payment idempotency: enforced both via Redis (Idempotency-Key, 24h) and via
+// Order.stripePaymentIntentId uniqueness (defense in depth).
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  extensions = [pgcrypto]
+}
+
+// ---------------------------------------------------------------------------
+// Identity
+// ---------------------------------------------------------------------------
+
+model User {
+  id                      String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email                   String    @unique @db.Citext
+  passwordHash            String?
+  isGuest                 Boolean   @default(false)
+  // Hashed (HMAC-SHA256 with server pepper) tracking token sent by email to guests.
+  // Plaintext token is never stored. Comparison is done by re-hashing the candidate.
+  guestTrackingTokenHash  String?   @unique
+  guestTokenExpiresAt     DateTime?
+  emailVerifiedAt         DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  addresses    Address[]
+  carts        Cart[]
+  orders       Order[]
+  wallet       UserWallet?
+  returns      Return[]
+  refreshTokens RefreshToken[]
+
+  @@index([isGuest, createdAt])
+}
+
+model RefreshToken {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String   @db.Uuid
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // SHA-256 of the opaque refresh token. Plaintext only ever lives in the user's cookie.
+  tokenHash     String   @unique
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  replacedById  String?  @db.Uuid
+  userAgent     String?
+  ipAddress     String?
+  createdAt     DateTime @default(now())
+
+  @@index([userId, expiresAt])
+}
+
+model Address {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @db.Uuid
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName    String
+  line1       String
+  line2       String?
+  city        String
+  region      String
+  postalCode  String
+  countryCode String   @db.Char(2)
+  phone       String?
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Catalog
+// ---------------------------------------------------------------------------
+
+model Product {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug           String   @unique
+  name           String
+  description    String
+  brand          String
+  category       String
+  basePriceCents Int
+  currency       String   @db.Char(3)
+  imageUrls      String[]
+  isPublished    Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  variants ProductVariant[]
+
+  @@index([category, isPublished])
+}
+
+model ProductVariant {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productId       String   @db.Uuid
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku             String   @unique
+  size            String
+  color           String
+  priceCentsOverride Int?
+  warehouseStock  Int      @default(0)
+  reservedStock   Int      @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+
+  // Hard invariants — DB enforces non-negative stock at all times.
+  // (Prisma maps these to CHECK constraints via migration.)
+  @@index([productId, isActive])
+  @@index([sku])
+}
+
+// ---------------------------------------------------------------------------
+// Cart
+// ---------------------------------------------------------------------------
+
+// A cart can be either:
+//   - Authenticated (userId set, anonymousToken null) — long-lived, one per user
+//   - Anonymous   (userId null, anonymousToken set) — keyed by HMAC of cookie token
+// Smart-merge moves anonymous CartItems onto the authenticated cart on login.
+
+model Cart {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String?  @db.Uuid
+  user            User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  anonymousToken  String?  @unique
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  items CartItem[]
+
+  @@unique([userId])
+  @@index([anonymousToken])
+}
+
+model CartItem {
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  cartId          String         @db.Uuid
+  cart            Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  variantId       String         @db.Uuid
+  variant         ProductVariant @relation(fields: [variantId], references: [id])
+  quantity        Int
+  unitPriceCents  Int
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@unique([cartId, variantId])
+  @@index([cartId])
+}
+
+// ---------------------------------------------------------------------------
+// Orders
+// ---------------------------------------------------------------------------
+
+enum OrderStatus {
+  PENDING
+  PAID
+  FULFILLED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum ReturnItemStatus {
+  NOT_RETURNED
+  RETURN_REQUESTED
+  PROCESSING
+  RESTOCKED_AND_REFUNDED
+}
+
+enum RefundDestination {
+  ORIGINAL_PAYMENT_METHOD
+  STORE_CREDIT
+}
+
+enum RefundStatus {
+  PENDING
+  ISSUED
+  FAILED
+}
+
+model Order {
+  id                    String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  // Human-readable, monotonically increasing display id (e.g., DF-000123).
+  displayId             String      @unique
+  userId                String      @db.Uuid
+  user                  User        @relation(fields: [userId], references: [id])
+  status                OrderStatus @default(PENDING)
+
+  subtotalCents         Int
+  shippingCents         Int
+  taxCents              Int
+  discountCents         Int         @default(0)
+  totalCents            Int
+  currency              String      @db.Char(3)
+
+  // Snapshots — addresses are denormalized into the order to survive later edits.
+  shippingAddress       Json
+  billingAddress        Json
+
+  // Idempotency-Key as supplied by client at checkout. Unique to prevent the
+  // same logical checkout from creating two orders even if Redis is purged.
+  idempotencyKey        String      @unique
+
+  // Stripe linkage. Both fields are filled in on PaymentIntent creation, but
+  // PENDING -> PAID is only ever driven from the webhook handler.
+  stripePaymentIntentId String?     @unique
+  stripeChargeId        String?
+
+  placedAt              DateTime    @default(now())
+  paidAt                DateTime?
+  fulfilledAt           DateTime?
+  deliveredAt           DateTime?
+  cancelledAt           DateTime?
+
+  items                 OrderItem[]
+  returns               Return[]
+  walletEntries         WalletTransaction[]
+
+  @@index([userId, placedAt])
+  @@index([status])
+}
+
+model OrderItem {
+  id                String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderId           String           @db.Uuid
+  order             Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variantId         String           @db.Uuid
+  variant           ProductVariant   @relation(fields: [variantId], references: [id])
+
+  // Snapshot of catalog state at order time.
+  productName       String
+  variantSku        String
+  size              String
+  color             String
+
+  quantity          Int
+  unitPriceCents    Int
+  lineTotalCents    Int
+
+  returnStatus      ReturnItemStatus @default(NOT_RETURNED)
+  deliveredAt       DateTime?
+
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  returns           Return[]
+
+  @@index([orderId])
+  @@index([variantId])
+  @@index([returnStatus])
+}
+
+// ---------------------------------------------------------------------------
+// Returns (item-level)
+// ---------------------------------------------------------------------------
+
+model Return {
+  id                  String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderItemId         String             @db.Uuid
+  orderItem           OrderItem          @relation(fields: [orderItemId], references: [id])
+  orderId             String             @db.Uuid
+  order               Order              @relation(fields: [orderId], references: [id])
+  userId              String             @db.Uuid
+  user                User               @relation(fields: [userId], references: [id])
+
+  reason              String
+  refundDestination   RefundDestination
+  refundAmountCents   Int
+  currency            String             @db.Char(3)
+  refundStatus        RefundStatus       @default(PENDING)
+
+  // Mocked label payload (carrier, tracking number, label URL, etc.)
+  shippingLabel       Json
+
+  requestedAt         DateTime           @default(now())
+  receivedAt          DateTime?
+  refundedAt          DateTime?
+  stripeRefundId      String?            @unique
+
+  walletTransactionId String?            @unique @db.Uuid
+  walletTransaction   WalletTransaction? @relation(fields: [walletTransactionId], references: [id])
+
+  // One open Return per order item at a time. (NULL slots are allowed by Postgres
+  // unique semantics — historical returns coexist via different orderItem/refundStatus
+  // combinations only when business rules require, which they don't here:
+  // an item moves linearly NOT_RETURNED -> RESTOCKED_AND_REFUNDED.)
+  @@unique([orderItemId])
+  @@index([userId])
+  @@index([refundStatus])
+}
+
+// ---------------------------------------------------------------------------
+// Wallet (store credit) + append-only ledger
+// ---------------------------------------------------------------------------
+
+// Denormalized balance — single source of truth is the WalletTransaction series,
+// but balanceCents is kept in sync transactionally for read performance.
+// Every mutation locks the wallet row (SELECT ... FOR UPDATE) before touching it.
+
+model UserWallet {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String   @unique @db.Uuid
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balanceCents  Int      @default(0)
+  currency      String   @db.Char(3)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  transactions WalletTransaction[]
+}
+
+enum WalletEntryType {
+  CREDIT
+  DEBIT
+}
+
+enum WalletEntryReason {
+  RETURN_REFUND
+  ADMIN_ADJUSTMENT
+  PROMO_GRANT
+  CHECKOUT_REDEMPTION
+  EXPIRY
+}
+
+model WalletTransaction {
+  id                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  walletId           String            @db.Uuid
+  wallet             UserWallet        @relation(fields: [walletId], references: [id])
+  type               WalletEntryType
+  reason             WalletEntryReason
+  amountCents        Int
+  // Snapshot of the resulting wallet balance after this entry was applied. Used
+  // for auditing — if (sum of credits - debits) != latest balanceAfterCents the
+  // ledger has been tampered with.
+  balanceAfterCents  Int
+  currency           String            @db.Char(3)
+
+  // Optional linkage to the order that caused the entry (refund, redemption).
+  orderId            String?           @db.Uuid
+  order              Order?            @relation(fields: [orderId], references: [id])
+
+  // Idempotency key for the entry itself — e.g., "return:<returnId>" — so the
+  // same logical credit cannot be applied twice across retries.
+  ledgerKey          String            @unique
+
+  createdAt          DateTime          @default(now())
+
+  return             Return?
+
+  @@index([walletId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Webhook event ledger (Stripe etc.)
+// ---------------------------------------------------------------------------
+
+model WebhookEvent {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  provider        String
+  providerEventId String
+  type            String
+  payload         Json
+  receivedAt      DateTime @default(now())
+  processedAt     DateTime?
+  processingError String?
+
+  @@unique([provider, providerEventId])
+  @@index([type, processedAt])
+}

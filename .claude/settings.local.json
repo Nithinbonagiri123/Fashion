@@ -10,7 +10,23 @@
       "Bash(npx playwright:*)",
       "Bash(npx prisma:*)",
       "Bash(ls /Users/nikkibonagiri/Desktop/job-dashboard/src/generated/prisma/index*)",
-      "Bash(ls /Users/nikkibonagiri/Desktop/job-dashboard/node_modules/@prisma/client/default*)"
+      "Bash(ls /Users/nikkibonagiri/Desktop/job-dashboard/node_modules/@prisma/client/default*)",
+      "Bash(curl -sS -o /tmp/home.html -w \"HTTP %{http_code}\\\\n\" http://localhost:3000/)",
+      "Bash(curl -sS -o /tmp/women.html -w \"HTTP %{http_code}\\\\n\" http://localhost:3000/women)",
+      "Bash(curl -sS -o /tmp/discover.html -w \"HTTP %{http_code}\\\\n\" http://localhost:3000/discover)",
+      "Bash(curl -sS -o /tmp/admin.html -w \"HTTP %{http_code}\\\\n\" http://localhost:3000/admin)",
+      "Bash(grep -E \"error|Error|Uncaught|build error|Module not found\" /tmp/home.html /tmp/women.html /tmp/discover.html /tmp/admin.html | head -20)",
+      "Read(//private/tmp/**)",
+      "Bash(curl -sS http://localhost:3000/)",
+      "Bash(curl -sS -o /dev/null -w \"/: %{http_code}\\\\n\" http://localhost:3000/)",
+      "Bash(curl -sS -o /dev/null -w \"/women: %{http_code}\\\\n\" http://localhost:3000/women)",
+      "Bash(curl -sS -o /dev/null -w \"/sale: %{http_code}\\\\n\" http://localhost:3000/sale)",
+      "Bash(pnpm --version)",
+      "Bash(pnpm install *)",
+      "Bash(mkdir -p /Users/nikkibonagiri/Desktop/demand-fashion/src/app/products/\\\\[slug\\\\] /Users/nikkibonagiri/Desktop/demand-fashion/src/app/cart && ls /Users/nikkibonagiri/Desktop/demand-fashion/src/app/products/)"
+    ],
+    "additionalDirectories": [
+      "/Users/nikkibonagiri/Desktop/demand-fashion/src/app/products"
     ]
   }
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Heart } from "lucide-react";
 import { type Garment } from "@/lib/garmentData";
 import { getGarmentImage } from "@/lib/imageMap";
@@ -14,7 +14,6 @@ interface GarmentCardProps {
   onLikeUpdate: (id: string, newCount: number) => void;
 }
 
-// Vary aspect ratios for masonry visual rhythm
 const heights = [
   "aspect-[3/4]",
   "aspect-[2/3]",
@@ -37,6 +36,7 @@ export default function GarmentCard({
   const [showHeartBurst, setShowHeartBurst] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
   const lastTapRef = useRef(0);
+  const reduce = useReducedMotion();
 
   const imgUrl = getGarmentImage(garment.id);
   const aspectClass = heights[index % heights.length];
@@ -62,40 +62,42 @@ export default function GarmentCard({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 30 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, y: 40 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.15 }}
       transition={{
-        delay: Math.min(index * 0.04, 0.8),
-        duration: 0.6,
+        delay: Math.min((index % 8) * 0.05, 0.4),
+        duration: 0.8,
         ease: [0.22, 1, 0.36, 1],
       }}
+      whileHover={reduce ? undefined : { y: -6 }}
       className="group relative break-inside-avoid mb-4 sm:mb-5"
     >
-      {/* Image */}
       <div
         className={`relative ${aspectClass} overflow-hidden bg-[#F5F0EA] cursor-pointer`}
         onClick={handleDoubleTap}
       >
         {!imgLoaded && <div className="skeleton absolute inset-0" />}
 
-        <img
+        <motion.img
           src={imgUrl}
           alt={garment.name}
           loading="lazy"
           onLoad={() => setImgLoaded(true)}
-          className={`absolute inset-0 w-full h-full object-cover product-img-hover ${
+          whileHover={reduce ? undefined : { scale: 1.06 }}
+          transition={{ duration: 0.9, ease: [0.25, 0.46, 0.45, 0.94] }}
+          className={`absolute inset-0 w-full h-full object-cover ${
             imgLoaded ? "opacity-100" : "opacity-0"
           }`}
         />
 
-        {/* Double-tap heart burst */}
         <AnimatePresence>
           {showHeartBurst && (
             <motion.div
               initial={{ scale: 0, opacity: 1 }}
-              animate={{ scale: 1.2, opacity: 0 }}
+              animate={{ scale: 1.4, opacity: 0 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.6 }}
+              transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
               className="absolute inset-0 flex items-center justify-center pointer-events-none z-20"
             >
               <Heart className="w-20 h-20 text-white fill-white drop-shadow-lg" />
@@ -103,22 +105,24 @@ export default function GarmentCard({
           )}
         </AnimatePresence>
 
-        {/* Hover overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+        <motion.div
+          initial={{ opacity: 0 }}
+          whileHover={{ opacity: 1 }}
+          transition={{ duration: 0.4 }}
+          className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none"
+        />
 
-        {/* View details slide-up */}
         <button
           onClick={(e) => {
             e.stopPropagation();
             onOpen(garment);
           }}
-          className="absolute inset-x-0 bottom-0 translate-y-full group-hover:translate-y-0 transition-transform duration-300 bg-black/70 backdrop-blur-sm text-white text-center py-3 text-[10px] tracking-[0.25em] uppercase z-10"
+          className="absolute inset-x-0 bottom-0 translate-y-full group-hover:translate-y-0 transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] bg-black/75 backdrop-blur-sm text-white text-center py-3 text-[10px] tracking-[0.25em] uppercase z-10"
         >
           View Details
         </button>
       </div>
 
-      {/* Info below image */}
       <div className="mt-2.5 flex items-start justify-between gap-2">
         <div
           className="flex-1 min-w-0 cursor-pointer"
@@ -132,17 +136,17 @@ export default function GarmentCard({
           </p>
         </div>
 
-        {/* Like button */}
-        <button
+        <motion.button
           onClick={(e) => {
             e.stopPropagation();
             handleLike();
           }}
+          whileTap={{ scale: 0.85 }}
           className="flex items-center gap-1.5 shrink-0 pt-0.5 group/like"
         >
           <motion.div
-            animate={liked ? { scale: [1, 1.3, 1] } : {}}
-            transition={{ duration: 0.3 }}
+            animate={liked ? { scale: [1, 1.4, 1] } : {}}
+            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
           >
             <Heart
               className={`w-4 h-4 transition-colors duration-300 ${
@@ -152,10 +156,16 @@ export default function GarmentCard({
               }`}
             />
           </motion.div>
-          <span className="text-[11px] text-[#8A8280] tabular-nums">
+          <motion.span
+            key={likeCount}
+            initial={{ y: -4, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.3 }}
+            className="text-[11px] text-[#8A8280] tabular-nums"
+          >
             {likeCount}
-          </span>
-        </button>
+          </motion.span>
+        </motion.button>
       </div>
     </motion.div>
   );

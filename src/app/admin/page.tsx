@@ -25,6 +25,7 @@ import {
   updateGarment,
   deleteGarment,
 } from "@/lib/supabase";
+import AnimatedNumber from "@/components/motion/AnimatedNumber";
 
 export default function AdminPage() {
   const [garments, setGarments] = useState<Garment[]>([]);
@@ -158,13 +159,13 @@ export default function AdminPage() {
             },
             {
               label: "Total Likes",
-              value: totalLikes.toLocaleString(),
+              value: totalLikes,
               icon: Heart,
               color: "#C9736B",
             },
             {
               label: "Most Loved",
-              value: topGarment?.like_count.toLocaleString() ?? "0",
+              value: topGarment?.like_count ?? 0,
               icon: TrendingUp,
               color: "#6B8E6B",
             },
@@ -179,23 +180,35 @@ export default function AdminPage() {
           ].map((stat, i) => (
             <motion.div
               key={stat.label}
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-              className="rounded-xl p-5 border border-white/5 bg-white/[0.03]"
+              transition={{
+                delay: i * 0.08,
+                duration: 0.6,
+                ease: [0.22, 1, 0.36, 1],
+              }}
+              whileHover={{ y: -4, borderColor: `${stat.color}40` }}
+              className="rounded-xl p-5 border border-white/5 bg-white/[0.03] transition-colors"
             >
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-[10px] tracking-[0.15em] uppercase text-white/40">
                     {stat.label}
                   </p>
-                  <p className="text-2xl font-light mt-1">{stat.value}</p>
+                  <p className="text-2xl font-light mt-1">
+                    <AnimatedNumber value={stat.value} />
+                  </p>
                 </div>
-                <stat.icon
-                  className="w-5 h-5"
-                  style={{ color: stat.color }}
-                  strokeWidth={1.5}
-                />
+                <motion.div
+                  whileHover={{ rotate: 360, scale: 1.15 }}
+                  transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  <stat.icon
+                    className="w-5 h-5"
+                    style={{ color: stat.color }}
+                    strokeWidth={1.5}
+                  />
+                </motion.div>
               </div>
             </motion.div>
           ))}
